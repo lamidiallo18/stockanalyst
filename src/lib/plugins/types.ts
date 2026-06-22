@@ -45,6 +45,7 @@ export const DataCapability = {
   NEWS: "news",
   FILINGS: "filings",
   SEARCH: "search",
+  HISTORICAL_RATIOS: "historical_ratios",
 } as const;
 export type DataCapability =
   (typeof DataCapability)[keyof typeof DataCapability];
@@ -87,13 +88,27 @@ export interface NormalizedPeriod {
   opIncome?: number;
   ebitda?: number;
   netIncome?: number;
+  pretaxIncome?: number;
+  incomeTax?: number;
   ocf?: number;
   capex?: number;
   fcf?: number;
   totalDebt?: number;
   cash?: number;
+  totalEquity?: number;
   shares?: number;
   reliability?: ReliabilityFlag;
+}
+
+// One period of provider-supplied valuation multiples (used to build the
+// historical multiple-range distribution). Providers that expose ratio history
+// (e.g. FMP) populate this; others return NOT_SUPPORTED.
+export interface NormalizedHistoricalRatio {
+  fiscalDate: string; // ISO
+  pe?: number;
+  evEbitda?: number;
+  evSales?: number;
+  pFcf?: number;
 }
 
 export interface NormalizedFinancials {
@@ -159,6 +174,10 @@ export interface DataProvider {
   getFilings(
     ticker: string,
   ): Promise<ProviderResult<NormalizedFiling[]> | NotSupported>;
+  getHistoricalRatios(
+    ticker: string,
+    opts?: { years?: number },
+  ): Promise<ProviderResult<NormalizedHistoricalRatio[]> | NotSupported>;
   search(query: string): Promise<ProviderResult<SearchResult[]> | NotSupported>;
   /** Lightweight check that the plugin is configured & reachable. */
   healthCheck(): Promise<{ ok: boolean; message?: string }>;

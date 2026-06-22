@@ -9,17 +9,40 @@ surfacing disconfirming evidence, and generating a rigorous investment memo.
 
 ## Status
 
-Built in phases. **Phase 0 (Foundation) is complete:**
+Built in phases.
+
+**Phase 0 (Foundation) — complete:**
 
 - Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4
-- SQLite via Prisma 7 (driver-adapter model), full data model + first migration
+- SQLite via Prisma 7 (driver-adapter model), full data model + migrations
 - **Plugin system** for data + LLM providers (FMP, SEC EDGAR, Anthropic registered)
 - Encrypted-at-rest API key storage (AES-256-GCM)
 - Settings page that discovers plugins and manages their config/keys
 - Dashboard shell with all pages scaffolded
 
-Subsequent phases: data spine (Phase 1) → memo pipeline (2) → file ingestion (3)
-→ portfolio & thesis tracker (4) → sector/theme + export (5).
+**Phase 1 (Data Spine) — complete:**
+
+- Live **FMP** and **SEC EDGAR** provider implementations (normalization isolated
+  in pure, unit-tested modules)
+- Cache-through HTTP layer (per-endpoint TTLs via the `DataCache` table)
+- **DataService** capability router: priority order, fallback, provenance
+  tracking, graceful degradation
+- Deterministic **Calc Engine**: growth, margins, FCF, ROIC/ROE, leverage,
+  dilution, current + historical valuation multiples — every value tagged with a
+  reliability flag (`REPORTED/DERIVED/PROXY/STALE/MISSING`)
+- **47 unit tests** covering the math, the engine, and both providers'
+  normalization
+- **Company Analysis** page wired to live data with reliability badges,
+  data-completeness scoring, historical multiple ranges, trend table, and peer
+  comps
+
+Next: memo pipeline (2) → file ingestion (3) → portfolio & thesis tracker (4)
+→ sector/theme + export (5).
+
+> **Note on live data:** fetching real financials requires outbound network
+> access to FMP / SEC. The deterministic core (normalization + Calc Engine) is
+> verified offline via unit tests (`npm test`); live fetches work when you run
+> the app on a machine with normal internet access and an enabled provider.
 
 ## Getting started
 
