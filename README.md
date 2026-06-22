@@ -36,8 +36,32 @@ Built in phases.
   data-completeness scoring, historical multiple ranges, trend table, and peer
   comps
 
-Next: memo pipeline (2) → file ingestion (3) → portfolio & thesis tracker (4)
-→ sector/theme + export (5).
+**Phase 2 (Memo Pipeline) — complete:**
+
+- LLM provider plugins: **Anthropic** + **OpenAI** (live, via REST — no SDK dep)
+  and a deterministic **Mock** provider (offline; runs the whole app with real
+  computed numbers + placeholder narrative, no key needed)
+- **LLMService** router: picks the enabled provider, resolves model by task tier
+  (reasoning / drafting / extraction) from the plugin's own catalog
+- Multi-stage **memo pipeline**: deterministic scoring → thesis critique → bull
+  → **bear (adversarial)** → disconfirming evidence → grounded section synthesis
+- **Grounding contract + audit pass**: the LLM gets the Financial Packet as
+  read-only data; a code-side audit flags any figure in the prose it can't trace
+  back to the packet ("⚠ unverified figure")
+- Transparent **Scoring Engine**: 10 categories scored deterministically with
+  evidence + signals + data-completeness; the LLM only writes rationale
+- In-process **job runner** with DB-backed progress; **New Analysis** wizard with
+  live progress, and a **memo view** (rating, sizing, scorecard, Markdown export)
+- **63 unit/integration tests** (math, calc, providers, scoring, audit, full
+  pipeline via mock, DB persistence round-trip)
+
+Next: file ingestion (3) → portfolio & thesis tracker (4) → sector/theme +
+export (5).
+
+> **No LLM key?** Enable the **Mock (offline demo)** provider in Settings to
+> click through the entire flow. The numbers and scores are real (computed
+> locally); only the narrative is placeholder. Swap in Anthropic or OpenAI
+> anytime for genuine analysis — it's just a plugin.
 
 > **Note on live data:** fetching real financials requires outbound network
 > access to FMP / SEC. The deterministic core (normalization + Calc Engine) is

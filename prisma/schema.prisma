@@ -154,6 +154,9 @@ model Memo {
   confidence      String? // "LOW" | "MEDIUM" | "HIGH"
   timeHorizon     String?
   modelUsed       String?
+  providerKey     String?
+  compositeScore  Int?
+  totalUnverified Int      @default(0)
   markdownCache   String?
   generatedAt     DateTime @default(now())
 
@@ -170,6 +173,7 @@ model MemoSection {
   key       String // executive_summary | business_overview | moat | ...
   ordering  Int      @default(0)
   contentMd String
+  auditJson String   @default("[]") // unverified figures flagged by the audit
   createdAt DateTime @default(now())
 
   citations Citation[]
@@ -187,6 +191,8 @@ model Score {
   rationaleMd     String?
   dataCompleteness String  @default("UNKNOWN") // LOW | MEDIUM | HIGH
   evidenceJson    String   @default("[]") // [{claim, sourceType, ref}]
+  signalsJson     String   @default("[]") // [{label, value, contribution}]
+  needsQualitative Boolean @default(false)
   createdAt       DateTime @default(now())
 
   @@index([memoId])

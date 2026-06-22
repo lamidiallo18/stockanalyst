@@ -1,5 +1,5 @@
-// Anthropic (Claude) LLM plugin. Primary reasoning engine for memo generation.
-// Phase 0: manifest + model catalog complete; live SDK calls land in Phase 2.
+// Anthropic (Claude) LLM plugin — live implementation via the Messages REST
+// API (no SDK dependency). Powers thesis critique, bear-case and drafting.
 
 import {
   type LLMProvider,
@@ -7,18 +7,70 @@ import {
   type PluginConfig,
 } from "../types";
 
-const NOT_YET = "Anthropic live calls are implemented in Phase 2 (memo pipeline).";
+const API = "https://api.anthropic.com/v1/messages";
+const VERSION = "2023-06-01";
+
+interface AnthropicResponse {
+  content?: { type: string; text?: string }[];
+  usage?: { input_tokens?: number; output_tokens?: number };
+  error?: { message?: string };
+}
 
 function createAnthropicProvider(config: PluginConfig): LLMProvider {
   const apiKey = String(config.apiKey ?? "");
+  const defaultModel = String(config.defaultModel ?? "claude-opus-4-8");
+
   return {
     key: "anthropic",
-    async complete() {
-      throw new Error(NOT_YET);
+    async complete(req) {
+      if (!apiKey) throw new Error("Anthropic API key not configured.");
+      const model = req.model ?? defaultModel;
+      const res = await fetch(API, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": VERSION,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: req.maxTokens ?? 4096,
+          temperature: req.temperature ?? 0.3,
+          system: req.system,
+          messages: req.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+      const json = (await res.json()) as AnthropicResponse;
+      if (!res.ok) {
+        throw new Error(
+          `Anthropic HTTP ${res.status}: ${json.error?.message ?? "request failed"}`,
+        );
+      }
+      const text = (json.content ?? [])
+        .filter((c) => c.type === "text")
+        .map((c) => c.text ?? "")
+        .join("");
+      return {
+        text,
+        model,
+        inputTokens: json.usage?.input_tokens,
+        outputTokens: json.usage?.output_tokens,
+      };
     },
     async healthCheck() {
       if (!apiKey) return { ok: false, message: "No API key configured." };
-      return { ok: false, message: NOT_YET };
+      try {
+        await this.complete({
+          messages: [{ role: "user", content: "ping" }],
+          maxTokens: 8,
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : "Failed" };
+      }
     },
   };
 }
