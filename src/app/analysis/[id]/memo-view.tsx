@@ -25,6 +25,7 @@ interface Section {
   ordering: number;
   contentMd: string;
   unverifiedFigures: string[];
+  citations: { locator: string | null; quote: string | null }[];
 }
 interface Memo {
   rating: string | null;
@@ -138,6 +139,20 @@ export function MemoView({ id }: { id: string }) {
             <p className="mt-2 rounded-md bg-[var(--warning)]/15 px-3 py-1.5 text-xs text-[var(--warning)]">
               ⚠ Unverified figures: {s.unverifiedFigures.join(", ")}
             </p>
+          )}
+          {s.citations.length > 0 && (
+            <div className="mt-2 border-t pt-2">
+              <span className="text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                Sources
+              </span>
+              <ul className="mt-1 space-y-0.5">
+                {s.citations.map((c, i) => (
+                  <li key={i} className="text-xs text-[var(--accent)]">
+                    ❏ {c.locator ?? "uploaded source"}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </Card>
       ))}

@@ -7,6 +7,9 @@ import { prisma } from "@/lib/db";
 import { DataService } from "@/lib/data/service";
 import { LLMService } from "@/lib/llm/service";
 import { runMemoPipeline, type MemoDraft } from "@/lib/memo/pipeline";
+import { retrieveForAnalysis } from "@/lib/sources/service";
+import { buildSourcesContext } from "@/lib/memo/sources-context";
+import { getSetting } from "@/lib/app-settings";
 import { AnalysisStatus, AnalysisType } from "@/lib/enums";
 
 // Holds references to in-flight job promises so they aren't garbage-collected.
@@ -17,6 +20,7 @@ export interface StartAnalysisInput {
   thesis: string;
   depth?: string;
   type?: string;
+  sourceIds?: string[]; // uploaded sources to attach to this analysis
 }
 
 export async function startAnalysis(
@@ -33,6 +37,14 @@ export async function startAnalysis(
       thesis: { create: { userThesisText: input.thesis } },
     },
   });
+
+  // Attach any pre-uploaded sources to this analysis.
+  if (input.sourceIds?.length) {
+    await prisma.source.updateMany({
+      where: { id: { in: input.sourceIds } },
+      data: { analysisId: analysis.id },
+    });
+  }
   const job = await prisma.job.create({
     data: { type: "ANALYSIS_MEMO", analysisId: analysis.id, status: "RUNNING", currentStep: "Queued" },
   });
@@ -78,8 +90,23 @@ async function runAnalysis(
       throw new Error(`No data found for "${ticker}".`);
     }
 
-    const draft = await runMemoPipeline(llm, packet, thesis, (pct, step) =>
-      setProgress(jobId, Math.max(8, pct), step),
+    // Retrieve relevant excerpts from any attached uploaded sources (respecting
+    // the privacy setting that controls sending source text to the LLM).
+    const features = await getSetting("features");
+    let sourcesContext = null;
+    if (features.allowSourceExcerptsToLLM) {
+      await setProgress(jobId, 14, "Retrieving relevant source excerpts");
+      const query = `${packet.profile.name} ${ticker} ${thesis}`;
+      const chunks = await retrieveForAnalysis(analysisId, query, 8);
+      sourcesContext = buildSourcesContext(chunks);
+    }
+
+    const draft = await runMemoPipeline(
+      llm,
+      packet,
+      thesis,
+      (pct, step) => setProgress(jobId, Math.max(14, pct), step),
+      sourcesContext,
     );
 
     await persistMemo(analysisId, draft, packet);
@@ -116,7 +143,7 @@ async function persistMemo(
   });
   const version = (last?.version ?? 0) + 1;
 
-  await prisma.memo.create({
+  const memo = await prisma.memo.create({
     data: {
       analysisId,
       version,
@@ -151,5 +178,26 @@ async function persistMemo(
         })),
       },
     },
+    include: { sections: true },
   });
+
+  // Link inline [S#] citations to their source chunks via the persisted
+  // section ids.
+  if (draft.citations.length) {
+    const sectionIdByKey = new Map(memo.sections.map((s) => [s.key, s.id]));
+    const rows = draft.citations
+      .map((c) => {
+        const memoSectionId = sectionIdByKey.get(c.sectionKey);
+        if (!memoSectionId) return null;
+        return {
+          memoSectionId,
+          sourceChunkId: c.chunkId,
+          locator: c.filename
+            ? `${c.filename}${c.page ? ` p.${c.page}` : ""}`
+            : null,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+    if (rows.length) await prisma.citation.createMany({ data: rows });
+  }
 }

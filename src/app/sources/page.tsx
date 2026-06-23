@@ -1,16 +1,14 @@
 import { PageHeader } from "@/components/page-header";
-import { ComingSoon } from "@/components/ui/primitives";
+import { SourcesClient } from "./sources-client";
 
-export default function Page() {
+export default function SourcesPage() {
   return (
     <div>
       <PageHeader
         title="Source Library"
-        subtitle="Uploaded files, extracted text, associated analyses, and source citations."
+        subtitle="Upload filings, articles, transcripts, decks or screenshots. Text is extracted and chunked locally, then cited in memos."
       />
-      <ComingSoon page="Source library page" phase="Phase 3">
-        Upload, text/OCR extraction, chunking and citation backlinks arrive in Phase 3.
-      </ComingSoon>
+      <SourcesClient />
     </div>
   );
 }

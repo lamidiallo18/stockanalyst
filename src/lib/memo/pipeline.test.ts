@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { runMemoPipeline, type PipelineLLM } from "./pipeline";
 import { mockPlugin } from "@/lib/plugins/llm/mock";
+import { buildSourcesContext } from "./sources-context";
+import { MEMO_SECTION_KEYS } from "./schemas";
+import { ScoreCategory } from "@/lib/enums";
 import { computePacket } from "@/lib/calc/engine";
 import type { NormalizedFinancials, NormalizedPeriod } from "@/lib/plugins/types";
 
@@ -74,5 +77,51 @@ describe("runMemoPipeline (mock provider)", () => {
     const draft = await runMemoPipeline(fakeLLM, packet, "x");
     // Mock placeholder text contains no stray numbers.
     expect(draft.totalUnverified).toBe(0);
+  });
+});
+
+describe("runMemoPipeline — source citations", () => {
+  // A fake LLM that emits an [S1] citation in the moat section at synthesis.
+  const citingLLM: PipelineLLM = {
+    providerKey: "fake",
+    complete: async (req) => {
+      const stage = req.system?.match(/MOCK_STAGE:\s*(\w+)/)?.[1] ?? "";
+      if (stage === "synthesis") {
+        return {
+          text: JSON.stringify({
+            sections: MEMO_SECTION_KEYS.map((key) => ({
+              key,
+              markdown:
+                key === "moat_analysis"
+                  ? "Switching costs are high per the uploaded report [S1]."
+                  : `Section ${key}.`,
+            })),
+            rating: "WATCHLIST",
+            confidence: "MEDIUM",
+            positionSizeLowPct: 1,
+            positionSizeHighPct: 3,
+            timeHorizon: "3y",
+            scoreRationales: Object.values(ScoreCategory).map((category) => ({
+              category,
+              rationaleMd: "ok",
+            })),
+          }),
+          model: "fake-1",
+        };
+      }
+      // Delegate other stages to the deterministic mock.
+      return mock.complete(req);
+    },
+  };
+
+  it("captures [S#] markers as citations linked to source chunks", async () => {
+    const sources = buildSourcesContext([
+      { id: "chunk-123", text: "High switching costs.", filename: "report.pdf", page: 4, score: 5 },
+    ]);
+    const draft = await runMemoPipeline(citingLLM, packet, "x", undefined, sources);
+    expect(draft.citations.length).toBe(1);
+    expect(draft.citations[0].sectionKey).toBe("moat_analysis");
+    expect(draft.citations[0].chunkId).toBe("chunk-123");
+    expect(draft.citations[0].filename).toBe("report.pdf");
   });
 });

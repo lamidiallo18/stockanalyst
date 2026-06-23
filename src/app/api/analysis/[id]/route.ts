@@ -18,7 +18,10 @@ export async function GET(
         orderBy: { version: "desc" },
         take: 1,
         include: {
-          sections: { orderBy: { ordering: "asc" } },
+          sections: {
+            orderBy: { ordering: "asc" },
+            include: { citations: true },
+          },
           scores: true,
         },
       },
@@ -56,6 +59,10 @@ export async function GET(
             ordering: s.ordering,
             contentMd: s.contentMd,
             unverifiedFigures: JSON.parse(s.auditJson || "[]"),
+            citations: s.citations.map((c) => ({
+              locator: c.locator,
+              quote: c.quote,
+            })),
           })),
           scores: memo.scores.map((s) => ({
             category: s.category,

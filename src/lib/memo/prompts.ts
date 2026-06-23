@@ -22,11 +22,21 @@ function jsonInstruction(shape: string): string {
   return `\n\nRespond with ONLY a single valid JSON object, no prose, no code fences, matching this shape:\n${shape}`;
 }
 
-export function critiquePrompt(thesis: string, packet: FinancialPacket) {
+// Optional uploaded-source excerpts, appended to a prompt's data context.
+function sourcesSection(sourcesBlock?: string): string {
+  return sourcesBlock ? `\n\n${sourcesBlock}\n` : "";
+}
+
+export function critiquePrompt(
+  thesis: string,
+  packet: FinancialPacket,
+  sourcesBlock?: string,
+) {
   const system = `${PERSONA}\nMOCK_STAGE: critique`;
   const user =
-    `DATA PACKET:\n${renderPacketContext(packet)}\n\n` +
-    `USER THESIS:\n"${thesis}"\n\n` +
+    `DATA PACKET:\n${renderPacketContext(packet)}\n` +
+    sourcesSection(sourcesBlock) +
+    `\nUSER THESIS:\n"${thesis}"\n\n` +
     `TASK: Critically analyze this thesis. Restate it precisely, identify the core bet, enumerate what must be true for it to work, surface HIDDEN assumptions the user may not realize they are making, and separate which claims are facts vs inferences.` +
     jsonInstruction(
       `{"restatedThesis": string, "coreBet": string, "mustBeTrue": string[], "hiddenAssumptions": string[], "factVsInference": {"facts": string[], "inferences": string[]}}`,
@@ -38,6 +48,7 @@ export function casePrompt(
   side: "bull" | "bear",
   thesis: string,
   packet: FinancialPacket,
+  sourcesBlock?: string,
 ) {
   const system = `${PERSONA}\nMOCK_STAGE: ${side}`;
   const stance =
@@ -45,18 +56,24 @@ export function casePrompt(
       ? "Build the STRONGEST honest version of the LONG case"
       : "Build the STRONGEST honest version of the SHORT/BEAR case. Be genuinely adversarial — assume the user is wrong and argue why";
   const user =
-    `DATA PACKET:\n${renderPacketContext(packet)}\n\n` +
-    `USER THESIS:\n"${thesis}"\n\n` +
-    `TASK: ${stance}. Ground every quantitative point in packet fields.` +
+    `DATA PACKET:\n${renderPacketContext(packet)}\n` +
+    sourcesSection(sourcesBlock) +
+    `\nUSER THESIS:\n"${thesis}"\n\n` +
+    `TASK: ${stance}. Ground every quantitative point in packet fields. Cite uploaded sources inline as [S#] where relevant.` +
     jsonInstruction(`{"points": string[]}`);
   return { system, user };
 }
 
-export function disconfirmingPrompt(thesis: string, packet: FinancialPacket) {
+export function disconfirmingPrompt(
+  thesis: string,
+  packet: FinancialPacket,
+  sourcesBlock?: string,
+) {
   const system = `${PERSONA}\nMOCK_STAGE: disconfirming`;
   const user =
-    `DATA PACKET:\n${renderPacketContext(packet)}\n\n` +
-    `USER THESIS:\n"${thesis}"\n\n` +
+    `DATA PACKET:\n${renderPacketContext(packet)}\n` +
+    sourcesSection(sourcesBlock) +
+    `\nUSER THESIS:\n"${thesis}"\n\n` +
     `TASK: Identify disconfirming evidence — what would weaken or break this thesis, what bears would argue, what is already priced in (reference valuation percentiles), and the key open questions that still need answering.` +
     jsonInstruction(
       `{"breakingEvidence": string[], "whatBearsArgue": string[], "pricedIn": string, "openQuestions": string[]}`,
@@ -72,6 +89,7 @@ export function synthesisPrompt(args: {
   bear: Case;
   disconfirming: Disconfirming;
   scoring: ScoringResult;
+  sourcesBlock?: string;
 }) {
   const { thesis, packet, critique, bull, bear, disconfirming, scoring } = args;
   const system = `${PERSONA}\nMOCK_STAGE: synthesis`;
@@ -79,15 +97,16 @@ export function synthesisPrompt(args: {
     .map((s) => `${s.category}=${s.value}/100 (${s.letter}, completeness ${s.dataCompleteness})`)
     .join("; ");
   const user =
-    `DATA PACKET:\n${renderPacketContext(packet)}\n\n` +
-    `USER THESIS:\n"${thesis}"\n\n` +
+    `DATA PACKET:\n${renderPacketContext(packet)}\n` +
+    sourcesSection(args.sourcesBlock) +
+    `\nUSER THESIS:\n"${thesis}"\n\n` +
     `THESIS CRITIQUE:\n${JSON.stringify(critique)}\n\n` +
     `BULL POINTS:\n${JSON.stringify(bull.points)}\n\n` +
     `BEAR POINTS:\n${JSON.stringify(bear.points)}\n\n` +
     `DISCONFIRMING:\n${JSON.stringify(disconfirming)}\n\n` +
     `PRECOMPUTED SCORES (do not change the numbers — explain them):\n${scoreLines}\n\n` +
     `TASK: Write the investment memo as markdown sections. Required section keys (use exactly these): ${MEMO_SECTION_KEYS.join(", ")}. ` +
-    `Each section should be tight and skeptical. The final_recommendation must align with the precomputed scores and the bear case. ` +
+    `Each section should be tight and skeptical. Where a claim is supported by an uploaded source excerpt, cite it inline as [S#]. The final_recommendation must align with the precomputed scores and the bear case. ` +
     `Also propose a rating, confidence, a position-size RANGE as % of portfolio (0 if avoid), a time horizon, and a one-paragraph rationale for EACH score category (use the exact category keys).` +
     jsonInstruction(
       `{"sections": [{"key": string, "markdown": string}], "rating": "ATTRACTIVE"|"WATCHLIST"|"AVOID"|"TOO_HARD"|"NEEDS_WORK", "confidence": "LOW"|"MEDIUM"|"HIGH", "positionSizeLowPct": number, "positionSizeHighPct": number, "timeHorizon": string, "scoreRationales": [{"category": string, "rationaleMd": string}]}`,

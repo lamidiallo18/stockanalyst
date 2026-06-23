@@ -10,6 +10,7 @@ const schema = z.object({
   thesis: z.string().min(1).max(8000),
   depth: z.enum(["QUICK", "STANDARD", "DEEP"]).optional(),
   type: z.enum(["STOCK", "SECTOR_THEME", "ETF", "PORTFOLIO_IMPACT"]).optional(),
+  sourceIds: z.array(z.string()).optional(),
 });
 
 export async function POST(req: NextRequest) {

@@ -25,6 +25,10 @@ import {
 } from "./prompts";
 import { auditText } from "./audit";
 import { collectKnownNumbers } from "./context";
+import {
+  extractCitationMarkers,
+  type SourcesContext,
+} from "./sources-context";
 
 // Minimal LLM surface the pipeline needs. LLMService satisfies it structurally;
 // tests pass a lightweight fake (e.g. the mock provider) instead.
@@ -43,6 +47,15 @@ export interface MemoSectionDraft {
   unverifiedFigures: string[];
 }
 
+export interface MemoCitationDraft {
+  sectionKey: string;
+  marker: string;
+  chunkId: string;
+  sourceId?: string;
+  filename?: string;
+  page?: number;
+}
+
 export interface MemoScoreDraft extends CategoryScore {
   rationaleMd: string;
 }
@@ -57,6 +70,7 @@ export interface MemoDraft {
   providerKey: string;
   sections: MemoSectionDraft[];
   scores: MemoScoreDraft[];
+  citations: MemoCitationDraft[];
   composite: number;
   markdown: string;
   totalUnverified: number;
@@ -139,25 +153,27 @@ export async function runMemoPipeline(
   packet: FinancialPacket,
   thesis: string,
   onProgress?: ProgressFn,
+  sources?: SourcesContext | null,
 ): Promise<MemoDraft> {
   const report = async (pct: number, step: string) => {
     if (onProgress) await onProgress(pct, step);
   };
+  const sourcesBlock = sources?.block;
 
   await report(10, "Computing transparent scores");
   const scoring = computeScores(packet);
 
   await report(22, "Critiquing the thesis");
-  const critique = await askJson(llm, critiquePrompt(thesis, packet), CritiqueSchema, "reasoning");
+  const critique = await askJson(llm, critiquePrompt(thesis, packet, sourcesBlock), CritiqueSchema, "reasoning");
 
   await report(38, "Building the bull case");
-  const bull = await askJson(llm, casePrompt("bull", thesis, packet), CaseSchema, "drafting");
+  const bull = await askJson(llm, casePrompt("bull", thesis, packet, sourcesBlock), CaseSchema, "drafting");
 
   await report(54, "Building the bear case (adversarial)");
-  const bear = await askJson(llm, casePrompt("bear", thesis, packet), CaseSchema, "reasoning");
+  const bear = await askJson(llm, casePrompt("bear", thesis, packet, sourcesBlock), CaseSchema, "reasoning");
 
   await report(68, "Surfacing disconfirming evidence");
-  const disconfirming = await askJson(llm, disconfirmingPrompt(thesis, packet), DisconfirmingSchema, "reasoning");
+  const disconfirming = await askJson(llm, disconfirmingPrompt(thesis, packet, sourcesBlock), DisconfirmingSchema, "reasoning");
 
   await report(85, "Drafting the memo");
   const synth = await askJson(
@@ -170,6 +186,7 @@ export async function runMemoPipeline(
       bear: bear.data,
       disconfirming: disconfirming.data,
       scoring,
+      sourcesBlock,
     }),
     SynthesisSchema,
     "drafting",
@@ -182,11 +199,28 @@ export async function runMemoPipeline(
   const byKey = new Map(synth.data.sections.map((s) => [s.key, s.markdown]));
   const sections: MemoSectionDraft[] = [];
   let totalUnverified = 0;
+  const citations: MemoCitationDraft[] = [];
   SECTION_ORDER.forEach((key, i) => {
     const md = byKey.get(key as MemoSectionKey) ?? "_Not generated._";
     const audit = auditText(md, known);
     totalUnverified += audit.unverified.length;
     sections.push({ key, ordering: i, contentMd: md, unverifiedFigures: audit.unverified });
+    // Map any [S#] markers the model used back to their source chunks.
+    if (sources) {
+      for (const marker of extractCitationMarkers(md)) {
+        const m = sources.byMarker[marker];
+        if (m) {
+          citations.push({
+            sectionKey: key,
+            marker,
+            chunkId: m.chunkId,
+            sourceId: m.sourceId,
+            filename: m.filename,
+            page: m.page,
+          });
+        }
+      }
+    }
   });
 
   // Merge LLM score rationales onto the deterministic scores.
@@ -212,6 +246,7 @@ export async function runMemoPipeline(
     providerKey: llm.providerKey,
     sections,
     scores,
+    citations,
     composite: scoring.composite,
     markdown,
     totalUnverified,

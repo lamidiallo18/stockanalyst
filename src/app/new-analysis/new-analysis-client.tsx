@@ -10,6 +10,7 @@ import {
   Muted,
   Badge,
 } from "@/components/ui/primitives";
+import { Uploader, type UploadedSource } from "@/components/uploader";
 
 type Depth = "QUICK" | "STANDARD" | "DEEP";
 
@@ -18,6 +19,7 @@ export function NewAnalysisClient() {
   const [ticker, setTicker] = useState("");
   const [thesis, setThesis] = useState("");
   const [depth, setDepth] = useState<Depth>("STANDARD");
+  const [sources, setSources] = useState<UploadedSource[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -38,7 +40,12 @@ export function NewAnalysisClient() {
       const res = await fetch("/api/analysis", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ subjectRef: ticker.trim(), thesis, depth }),
+        body: JSON.stringify({
+          subjectRef: ticker.trim(),
+          thesis,
+          depth,
+          sourceIds: sources.map((s) => s.id),
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -135,6 +142,26 @@ export function NewAnalysisClient() {
           value={thesis}
           onChange={(e) => setThesis(e.target.value)}
         />
+      </Card>
+
+      <Card>
+        <CardTitle>Attach files (optional)</CardTitle>
+        <Muted className="mt-1 mb-3 block text-xs">
+          Filings, articles, transcripts or decks. Relevant excerpts are
+          retrieved and cited in the memo.
+        </Muted>
+        <Uploader
+          onUploaded={(s) => setSources((prev) => [...prev, s])}
+        />
+        {sources.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sources.map((s) => (
+              <Badge key={s.id} tone="accent">
+                {s.filename}
+              </Badge>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card>

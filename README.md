@@ -55,8 +55,24 @@ Built in phases.
 - **63 unit/integration tests** (math, calc, providers, scoring, audit, full
   pipeline via mock, DB persistence round-trip)
 
-Next: file ingestion (3) → portfolio & thesis tracker (4) → sector/theme +
-export (5).
+**Phase 3 (File-assisted research) — complete:**
+
+- Upload PDFs, DOCX, text/markdown, CSV/HTML and images via drag-and-drop;
+  content-addressed local storage (`./data/uploads`, sha256 dedupe)
+- Text extraction: **PDF** (unpdf, per-page), **DOCX** (mammoth), **images**
+  (tesseract OCR, optional/graceful), plain text — async, status-tracked
+- Pure **chunking** + local **BM25 retrieval** (no embedding API → uploaded text
+  never leaves the machine)
+- Sources attach to an analysis; relevant excerpts are retrieved and injected
+  into the memo prompts, and the model's inline **[S#] citations** are linked
+  back to the exact source chunk and shown under each section
+- **Source Library** page (upload, extraction status, view extracted text,
+  delete) + an upload step in New Analysis
+- Respects the `allowSourceExcerptsToLLM` privacy setting
+- **78 tests** (added chunking, BM25, source-context, and a citation-flow
+  pipeline test)
+
+Next: portfolio & thesis tracker (4) → sector/theme + export (5).
 
 > **No LLM key?** Enable the **Mock (offline demo)** provider in Settings to
 > click through the entire flow. The numbers and scores are real (computed
