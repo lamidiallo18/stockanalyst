@@ -1,23 +1,26 @@
-// Generic key/value app settings (portfolio limits, model preferences, flags).
+// Generic key/value app settings. Every default here is consumed by v1 code:
+// valuationPolicy by the reverse-DCF module, sizingPolicy by the sizing engine,
+// modelPreferences by the LLM service.
 import "server-only";
 import { prisma } from "@/lib/db";
 
-// Defaults applied when a setting hasn't been saved yet.
 export const SETTING_DEFAULTS = {
-  portfolioLimits: {
+  // Reverse-DCF inputs (deterministic; see src/lib/calc/reverse-dcf.ts).
+  // Horizon is pinned at 10y and terminal assumption is perpetuity growth —
+  // both documented constants in the module, not settings.
+  valuationPolicy: {
+    discountRatePct: 10,
+  },
+  // Deterministic position-sizing inputs (src/lib/sizing/engine.ts).
+  sizingPolicy: {
     maxSingleNamePct: 8,
-    maxSectorPct: 30,
-    maxThemePct: 35,
-    targetCashPct: 5,
+    targetVolPct: 25,
   },
   modelPreferences: {
-    reasoningModel: "claude-opus-4-8",
-    draftingModel: "claude-sonnet-4-6",
-    extractionModel: "claude-haiku-4-5-20251001",
-  },
-  features: {
-    allowSourceExcerptsToLLM: true,
-    useEmbeddingRetrieval: false,
+    // Tier→model resolution normally comes from the enabled LLM plugin's
+    // catalog; these act as overrides when set.
+    reasoningModel: "",
+    draftingModel: "",
   },
 } as const;
 

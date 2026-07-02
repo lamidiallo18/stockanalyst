@@ -1,8 +1,10 @@
-// GET  /api/plugins         -> list all plugins with (safe) config state
-// POST /api/plugins         -> save config for one plugin { providerKey, ...}
+// GET  /api/plugins -> list all plugins with (safe) config state
+// POST /api/plugins -> save config for one plugin { providerKey, ... }
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { listPluginViews, savePluginConfig } from "@/lib/provider-config";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const plugins = await listPluginViews();
@@ -13,7 +15,9 @@ const saveSchema = z.object({
   providerKey: z.string().min(1),
   enabled: z.boolean().optional(),
   priority: z.number().int().optional(),
-  values: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  values: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .optional(),
 });
 
 export async function POST(req: NextRequest) {

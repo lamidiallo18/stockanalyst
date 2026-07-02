@@ -1,7 +1,7 @@
-// StockAnalyst — local-first investment research database
-// SQLite via Prisma. Enums/array fields are modeled as String / JSON-encoded
-// String because SQLite does not support native enums or scalar lists.
-// See src/lib/enums.ts for the canonical enum value sets.
+// StockAnalyst — local-first investment research database (v1 scope: Phases 0-2).
+// SQLite via Prisma. Enums are modeled as String because SQLite has no native
+// enums; canonical value sets live in src/lib/enums.ts. Every model here is
+// consumed by v1 code — no speculative fields for future phases.
 
 generator client {
   provider = "prisma-client-js"
@@ -22,12 +22,12 @@ model ProviderConfig {
   enabled         Boolean  @default(false)
   priority        Int      @default(100) // lower = tried first
   encryptedApiKey String? // AES-GCM ciphertext, never plaintext at rest
-  settingsJson    String   @default("{}") // arbitrary per-plugin config
+  settingsJson    String   @default("{}") // per-plugin config (non-secret)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
-// Generic key/value app settings (portfolio limits, model prefs, flags).
+// Generic key/value app settings (valuation policy, sizing policy, model prefs).
 model AppSetting {
   key       String   @id
   valueJson String   @default("{}")
@@ -35,133 +35,58 @@ model AppSetting {
 }
 
 // ---------------------------------------------------------------------------
-// Companies & financial data (populated in Phase 1)
-// ---------------------------------------------------------------------------
-model Company {
-  id            String   @id @default(cuid())
-  ticker        String   @unique
-  name          String
-  exchange      String?
-  sector        String?
-  industry      String?
-  country       String?
-  cik           String? // SEC EDGAR Central Index Key
-  description   String?
-  lastRefreshedAt DateTime?
-  createdAt     DateTime @default(now())
-
-  quotes            SecurityQuote[]
-  financials        FinancialSnapshot[]
-  derived           DerivedMetrics[]
-  analyses          Analysis[]
-}
-
-model SecurityQuote {
-  id         String   @id @default(cuid())
-  companyId  String
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  asOf       DateTime
-  price      Float?
-  marketCap  Float?
-  enterpriseValue Float?
-  sourceKey  String? // which provider plugin produced this
-  createdAt  DateTime @default(now())
-
-  @@index([companyId, asOf])
-}
-
-model FinancialSnapshot {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  periodType  String // "FY" | "Q"
-  fiscalDate  DateTime
-  revenue     Float?
-  grossProfit Float?
-  opIncome    Float?
-  ebitda      Float?
-  netIncome   Float?
-  ocf         Float?
-  capex       Float?
-  fcf         Float?
-  totalDebt   Float?
-  cash        Float?
-  shares      Float?
-  sourceKey   String?
-  reliability String   @default("REPORTED") // see ReliabilityFlag enum
-  createdAt   DateTime @default(now())
-
-  @@index([companyId, fiscalDate])
-}
-
-// Computed by the deterministic Calc Engine, cached.
-model DerivedMetrics {
-  id              String   @id @default(cuid())
-  companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  asOf            DateTime
-  metricsJson     String // full computed packet (margins, ROIC, multiples, flags)
-  createdAt       DateTime @default(now())
-
-  @@index([companyId, asOf])
-}
-
-// ---------------------------------------------------------------------------
 // Analyses, theses, memos
 // ---------------------------------------------------------------------------
 model Analysis {
   id         String   @id @default(cuid())
-  type       String // "STOCK" | "SECTOR_THEME" | "ETF" | "PORTFOLIO_IMPACT"
-  subjectRef String // ticker or theme string
+  type       String // "STOCK" (sector/theme analysis is out of v1 scope)
+  subjectRef String // ticker
   title      String
   depth      String   @default("STANDARD") // "QUICK" | "STANDARD" | "DEEP"
-  status     String   @default("DRAFT") // "DRAFT" | "RUNNING" | "COMPLETE" | "ERROR"
-  companyId  String?
-  company    Company? @relation(fields: [companyId], references: [id])
+  status     String   @default("RUNNING") // "RUNNING" | "COMPLETE" | "ERROR"
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  thesis        Thesis?
-  memos         Memo[]
-  sources       Source[]
-  thesisUpdates ThesisUpdate[]
-  checklist     ChecklistItem[]
-  jobs          Job[]
+  thesis Thesis?
+  memos  Memo[]
+  jobs   Job[]
 }
 
 model Thesis {
-  id            String   @id @default(cuid())
-  analysisId    String   @unique
-  analysis      Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  analysisId     String   @unique
+  analysis       Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
   userThesisText String
-  coreBet       String?
-  mustBeTrueJson String  @default("[]")
-  entryPrice    Float?
-  timeHorizon   String?
-  convictionLevel String? // "LOW" | "MEDIUM" | "HIGH"
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt      DateTime @default(now())
 }
 
 model Memo {
-  id              String   @id @default(cuid())
-  analysisId      String
-  analysis        Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  version         Int      @default(1)
-  rating          String? // "ATTRACTIVE" | "WATCHLIST" | "AVOID" | "TOO_HARD" | "NEEDS_WORK"
-  positionSizeLow Float?
+  id               String   @id @default(cuid())
+  analysisId       String
+  analysis         Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  version          Int      @default(1)
+  rating           String? // ATTRACTIVE | WATCHLIST | AVOID | TOO_HARD | NEEDS_WORK
+  confidence       String? // LOW | MEDIUM | HIGH
+  timeHorizon      String?
+  // Deterministic sizing (computed by the sizing engine, not the LLM)
+  positionSizeLow  Float?
   positionSizeHigh Float?
-  confidence      String? // "LOW" | "MEDIUM" | "HIGH"
-  timeHorizon     String?
-  modelUsed       String?
-  providerKey     String?
-  compositeScore  Int?
-  totalUnverified Int      @default(0)
-  markdownCache   String?
-  generatedAt     DateTime @default(now())
+  sizingRationale  String?
+  // Provenance + scoring
+  modelUsed        String?
+  providerKey      String?
+  compositeScore   Int?
+  totalUnverified  Int      @default(0)
+  // Cost accounting (amendment 7): estimate before run, actuals after
+  estimatedCostUsd Float?
+  actualCostUsd    Float?
+  inputTokens      Int?
+  outputTokens     Int?
+  markdownCache    String?
+  generatedAt      DateTime @default(now())
 
-  sections  MemoSection[]
-  scores    Score[]
+  sections MemoSection[]
+  scores   Score[]
 
   @@index([analysisId, version])
 }
@@ -170,156 +95,79 @@ model MemoSection {
   id        String   @id @default(cuid())
   memoId    String
   memo      Memo     @relation(fields: [memoId], references: [id], onDelete: Cascade)
-  key       String // executive_summary | business_overview | moat | ...
+  key       String // executive_summary | moat_analysis | ...
   ordering  Int      @default(0)
   contentMd String
   auditJson String   @default("[]") // unverified figures flagged by the audit
   createdAt DateTime @default(now())
 
-  citations Citation[]
-
   @@index([memoId])
 }
 
 model Score {
-  id              String   @id @default(cuid())
-  memoId          String
-  memo            Memo     @relation(fields: [memoId], references: [id], onDelete: Cascade)
-  category        String // business_quality | moat_durability | ...
-  value           Int? // 0-100
-  letter          String? // A-F band
-  rationaleMd     String?
-  dataCompleteness String  @default("UNKNOWN") // LOW | MEDIUM | HIGH
-  evidenceJson    String   @default("[]") // [{claim, sourceType, ref}]
-  signalsJson     String   @default("[]") // [{label, value, contribution}]
-  needsQualitative Boolean @default(false)
-  createdAt       DateTime @default(now())
+  id               String   @id @default(cuid())
+  memoId           String
+  memo             Memo     @relation(fields: [memoId], references: [id], onDelete: Cascade)
+  category         String // 9 categories; see ScoreCategory in enums.ts
+  value            Int
+  letter           String
+  rationaleMd      String?
+  dataCompleteness String   @default("UNKNOWN") // LOW | MEDIUM | HIGH
+  evidenceJson     String   @default("[]") // [{claim, sourceType, ref}]
+  signalsJson      String   @default("[]") // [{label, value, contribution}]
+  needsQualitative Boolean  @default(false)
+  clamped          Boolean  @default(false) // anti-regression clamp fired (amendment 4)
+  comparative      Boolean  @default(false) // scored vs peer set rather than absolute
+  createdAt        DateTime @default(now())
 
   @@index([memoId])
 }
 
 // ---------------------------------------------------------------------------
-// Sources (uploaded files) & citations
+// Provider reconciliation (amendment 2): when providers disagree >2% on the
+// same reported field, the losing value is stored here and surfaced — never
+// silently discarded.
 // ---------------------------------------------------------------------------
-model Source {
-  id              String   @id @default(cuid())
-  analysisId      String?
-  analysis        Analysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull)
-  kind            String // PDF | ARTICLE | IMAGE | TRANSCRIPT | FILING | NOTE
-  filename        String
-  storagePath     String
-  sha256          String
-  mimeType        String?
-  byteSize        Int?
-  extractionStatus String  @default("PENDING") // PENDING | DONE | FAILED
-  uploadedAt      DateTime @default(now())
-
-  chunks SourceChunk[]
-
-  @@index([analysisId])
-}
-
-model SourceChunk {
-  id        String   @id @default(cuid())
-  sourceId  String
-  source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  idx       Int
-  text      String
-  page      Int?
-  createdAt DateTime @default(now())
-
-  citations Citation[]
-
-  @@index([sourceId])
-}
-
-model Citation {
+model Reconciliation {
   id            String   @id @default(cuid())
-  memoSectionId String
-  memoSection   MemoSection @relation(fields: [memoSectionId], references: [id], onDelete: Cascade)
-  sourceChunkId String?
-  sourceChunk   SourceChunk? @relation(fields: [sourceChunkId], references: [id], onDelete: SetNull)
-  dataPointRef  String? // packet field id, when citing computed/API data
-  quote         String?
-  locator       String? // page / section anchor
+  ticker        String
+  field         String // e.g. "revenue", "netIncome"
+  fiscalDate    String // ISO date of the period
+  chosenProvider String
+  chosenValue   Float
+  otherProvider String
+  otherValue    Float
+  pctDiff       Float
   createdAt     DateTime @default(now())
 
-  @@index([memoSectionId])
-}
-
-// ---------------------------------------------------------------------------
-// Portfolio
-// ---------------------------------------------------------------------------
-model PortfolioHolding {
-  id          String   @id @default(cuid())
-  ticker      String
-  name        String?
-  sector      String?
-  themesJson  String   @default("[]")
-  geography   String?
-  factorsJson String   @default("[]")
-  shares      Float?
-  costBasis   Float?
-  currentValue Float?
-  weightPct   Float?
-  updatedAt   DateTime @updatedAt
-  createdAt   DateTime @default(now())
-}
-
-// ---------------------------------------------------------------------------
-// Thesis tracking
-// ---------------------------------------------------------------------------
-model ThesisUpdate {
-  id                String   @id @default(cuid())
-  analysisId        String
-  analysis          Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  date              DateTime @default(now())
-  note              String
-  priceAtUpdate     Float?
-  assumptionsChangedJson String @default("[]")
-  status            String   @default("INTACT") // INTACT | WEAKENING | BROKEN | PLAYED_OUT
-
-  @@index([analysisId])
-}
-
-model ChecklistItem {
-  id          String   @id @default(cuid())
-  analysisId  String
-  analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  kind        String // WRONG_IF | SELL_IF | PRICED_IN | KPI
-  text        String
-  currentStatus String @default("OPEN")
-  lastChecked DateTime?
-  createdAt   DateTime @default(now())
-
-  @@index([analysisId])
+  @@index([ticker, fiscalDate])
 }
 
 // ---------------------------------------------------------------------------
 // External data cache + background jobs
 // ---------------------------------------------------------------------------
 model DataCache {
-  id          String   @id @default(cuid())
-  providerKey String
-  endpoint    String
-  paramsHash  String
+  id           String   @id @default(cuid())
+  providerKey  String
+  endpoint     String
+  paramsHash   String
   responseJson String
-  fetchedAt   DateTime @default(now())
-  ttlSeconds  Int      @default(3600)
+  fetchedAt    DateTime @default(now())
+  ttlSeconds   Int      @default(3600)
 
   @@unique([providerKey, endpoint, paramsHash])
 }
 
 model Job {
-  id          String   @id @default(cuid())
-  type        String // ANALYSIS_MEMO | SOURCE_EXTRACT | DATA_REFRESH
-  analysisId  String?
-  analysis    Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  status      String   @default("QUEUED") // QUEUED | RUNNING | DONE | ERROR
-  progressPct Int      @default(0)
-  currentStep String?
-  logJson     String   @default("[]")
-  error       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String    @id @default(cuid())
+  type             String // "ANALYSIS_MEMO"
+  analysisId       String?
+  analysis         Analysis? @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  status           String    @default("RUNNING") // RUNNING | DONE | ERROR
+  progressPct      Int       @default(0)
+  currentStep      String?
+  estimatedCostUsd Float? // shown in the job UI while running (amendment 7)
+  error            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }

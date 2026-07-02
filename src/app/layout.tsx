@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "StockAnalyst — buy-side research desk",
   description:
-    "Local, skeptical investment research and portfolio screening tool.",
+    "Local, skeptical investment research tool. Grounded memos, transparent scoring.",
 };
 
 export default function RootLayout({

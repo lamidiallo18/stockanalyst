@@ -1,5 +1,4 @@
-// Minimal UI primitives (Card, Badge, Button, etc.) styled with the app theme.
-// Kept lightweight intentionally; can be swapped for shadcn/ui later.
+// Minimal UI primitives (Card, Badge, Button, Input) styled with the app theme.
 import { cn } from "@/lib/utils";
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
@@ -85,8 +84,7 @@ export function Badge({
 
 type ButtonVariant = "primary" | "secondary" | "ghost";
 const variantMap: Record<ButtonVariant, string> = {
-  primary:
-    "bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50",
+  primary: "bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50",
   secondary:
     "bg-[var(--surface-2)] text-[var(--foreground)] hover:bg-[var(--border)] disabled:opacity-50",
   ghost:
@@ -125,29 +123,5 @@ export function Input({
       )}
       {...props}
     />
-  );
-}
-
-// A stub panel used by pages not yet implemented in this phase.
-export function ComingSoon({
-  page,
-  phase,
-  children,
-}: {
-  page: string;
-  phase: string;
-  children?: ReactNode;
-}) {
-  return (
-    <Card className="border-dashed">
-      <div className="flex items-center gap-2">
-        <CardTitle>{page}</CardTitle>
-        <Badge tone="accent">{phase}</Badge>
-      </div>
-      <p className="mt-2 text-sm text-[var(--muted)]">
-        {children ??
-          "This page is scaffolded. Functionality arrives in a later build phase."}
-      </p>
-    </Card>
   );
 }

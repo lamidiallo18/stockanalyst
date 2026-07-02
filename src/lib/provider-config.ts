@@ -13,7 +13,6 @@ import {
   maskSecret,
 } from "@/lib/crypto";
 import type {
-  AnyPlugin,
   PluginConfig,
   PluginConfigField,
 } from "@/lib/plugins/types";
@@ -26,7 +25,7 @@ export interface PluginView {
   description: string;
   kind: "DATA" | "LLM";
   capabilities?: string[];
-  models?: { id: string; label: string; tier: string }[];
+  models?: { id: string; label: string; tier: string; pricing: { usdPerMTokIn: number; usdPerMTokOut: number } }[];
   configFields: PluginConfigField[];
   docsUrl?: string;
   keyless?: boolean;
@@ -36,10 +35,6 @@ export interface PluginView {
   configValues: Record<string, string | number | boolean>;
   secretHints: Record<string, string>; // key -> masked hint (if set)
   configured: boolean; // all required fields present
-}
-
-function manifestKind(p: AnyPlugin): "DATA" | "LLM" {
-  return p.manifest.kind;
 }
 
 export async function listPluginViews(): Promise<PluginView[]> {
@@ -60,11 +55,8 @@ export async function listPluginViews(): Promise<PluginView[]> {
 
     for (const field of p.manifest.configFields) {
       if (field.secret) {
-        // Secret lives in encryptedApiKey (single-secret plugins) or in saved.
         const hasSecret =
-          field.key === "apiKey"
-            ? Boolean(cfg?.encryptedApiKey)
-            : Boolean(saved[field.key]);
+          field.key === "apiKey" ? Boolean(cfg?.encryptedApiKey) : false;
         if (hasSecret && cfg?.encryptedApiKey && canEncrypt()) {
           try {
             secretHints[field.key] = maskSecret(
@@ -88,7 +80,7 @@ export async function listPluginViews(): Promise<PluginView[]> {
       key: p.manifest.key,
       name: p.manifest.name,
       description: p.manifest.description,
-      kind: manifestKind(p),
+      kind: p.manifest.kind,
       configFields: p.manifest.configFields,
       docsUrl: p.manifest.docsUrl,
       enabled: cfg?.enabled ?? false,
@@ -146,11 +138,7 @@ export async function savePluginConfig(
           "Cannot store secret: APP_SECRET is not set in .env.local.",
         );
       }
-      if (field.key === "apiKey") {
-        encryptedApiKey = encryptSecret(str);
-      } else {
-        saved[field.key] = encryptSecret(str);
-      }
+      if (field.key === "apiKey") encryptedApiKey = encryptSecret(str);
     } else {
       saved[field.key] = incoming;
     }

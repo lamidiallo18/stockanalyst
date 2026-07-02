@@ -8,8 +8,7 @@
 //
 // To add a new provider: create a file under plugins/data/ or plugins/llm/,
 // export a `*Plugin` object implementing the contract, and register it in the
-// matching index.ts. No changes to the pipeline, registry, or UI are required —
-// the Settings page discovers it automatically from the registry.
+// matching index.ts. The registry and Settings UI discover it automatically.
 // ===========================================================================
 
 import type { ReliabilityFlag } from "@/lib/enums";
@@ -29,7 +28,6 @@ export interface PluginConfigField {
   secret?: boolean;
   placeholder?: string;
   help?: string;
-  defaultValue?: string | number | boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,12 +38,10 @@ export const DataCapability = {
   PROFILE: "profile",
   QUOTE: "quote",
   FINANCIALS: "financials",
-  PEERS: "peers",
-  ESTIMATES: "estimates",
-  NEWS: "news",
-  FILINGS: "filings",
-  SEARCH: "search",
   HISTORICAL_RATIOS: "historical_ratios",
+  PRICE_HISTORY: "price_history",
+  PEERS: "peers",
+  SEARCH: "search",
 } as const;
 export type DataCapability =
   (typeof DataCapability)[keyof typeof DataCapability];
@@ -100,9 +96,12 @@ export interface NormalizedPeriod {
   reliability?: ReliabilityFlag;
 }
 
-// One period of provider-supplied valuation multiples (used to build the
-// historical multiple-range distribution). Providers that expose ratio history
-// (e.g. FMP) populate this; others return NOT_SUPPORTED.
+export interface NormalizedFinancials {
+  ticker: string;
+  periods: NormalizedPeriod[];
+}
+
+// One period of provider-supplied valuation multiples (historical ranges).
 export interface NormalizedHistoricalRatio {
   fiscalDate: string; // ISO
   pe?: number;
@@ -111,29 +110,15 @@ export interface NormalizedHistoricalRatio {
   pFcf?: number;
 }
 
-export interface NormalizedFinancials {
-  ticker: string;
-  periods: NormalizedPeriod[];
+// Daily closes, most-recent-first. Used for realized volatility.
+export interface NormalizedPricePoint {
+  date: string; // ISO
+  close: number;
 }
 
 export interface NormalizedPeer {
   ticker: string;
   name?: string;
-}
-
-export interface NormalizedNewsItem {
-  title: string;
-  url: string;
-  source?: string;
-  publishedAt?: string; // ISO
-  summary?: string;
-}
-
-export interface NormalizedFiling {
-  type: string; // 10-K, 10-Q, 8-K, etc.
-  filedAt?: string;
-  url: string;
-  title?: string;
 }
 
 export interface SearchResult {
@@ -163,21 +148,19 @@ export interface DataProvider {
   ): Promise<ProviderResult<NormalizedQuote> | NotSupported>;
   getFinancials(
     ticker: string,
-    opts?: { years?: number; quarterly?: boolean },
+    opts?: { years?: number },
   ): Promise<ProviderResult<NormalizedFinancials> | NotSupported>;
-  getPeers(
-    ticker: string,
-  ): Promise<ProviderResult<NormalizedPeer[]> | NotSupported>;
-  getNews(
-    query: string,
-  ): Promise<ProviderResult<NormalizedNewsItem[]> | NotSupported>;
-  getFilings(
-    ticker: string,
-  ): Promise<ProviderResult<NormalizedFiling[]> | NotSupported>;
   getHistoricalRatios(
     ticker: string,
     opts?: { years?: number },
   ): Promise<ProviderResult<NormalizedHistoricalRatio[]> | NotSupported>;
+  getPriceHistory(
+    ticker: string,
+    opts?: { days?: number },
+  ): Promise<ProviderResult<NormalizedPricePoint[]> | NotSupported>;
+  getPeers(
+    ticker: string,
+  ): Promise<ProviderResult<NormalizedPeer[]> | NotSupported>;
   search(query: string): Promise<ProviderResult<SearchResult[]> | NotSupported>;
   /** Lightweight check that the plugin is configured & reachable. */
   healthCheck(): Promise<{ ok: boolean; message?: string }>;
@@ -229,11 +212,18 @@ export interface LLMProvider {
   healthCheck(): Promise<{ ok: boolean; message?: string }>;
 }
 
+// Per-model pricing, used for pre-run cost estimates and post-run actuals.
+export interface LLMModelPricing {
+  usdPerMTokIn: number;
+  usdPerMTokOut: number;
+}
+
 export interface LLMModelOption {
   id: string;
   label: string;
-  /** suggested role: heavy reasoning vs. cheap drafting/extraction. */
-  tier: "reasoning" | "drafting" | "extraction";
+  /** suggested role: heavy reasoning vs. cheaper drafting. */
+  tier: "reasoning" | "drafting";
+  pricing: LLMModelPricing;
 }
 
 export interface LLMProviderPlugin {

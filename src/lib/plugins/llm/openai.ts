@@ -17,13 +17,12 @@ interface OpenAIResponse {
 
 function createOpenAIProvider(config: PluginConfig): LLMProvider {
   const apiKey = String(config.apiKey ?? "");
-  const defaultModel = String(config.defaultModel ?? "gpt-4o");
 
   return {
     key: "openai",
     async complete(req) {
       if (!apiKey) throw new Error("OpenAI API key not configured.");
-      const model = req.model ?? defaultModel;
+      const model = req.model ?? "gpt-4o";
       const messages = [
         ...(req.system ? [{ role: "system", content: req.system }] : []),
         ...req.messages.map((m) => ({ role: m.role, content: m.content })),
@@ -38,7 +37,6 @@ function createOpenAIProvider(config: PluginConfig): LLMProvider {
           model,
           messages,
           max_completion_tokens: req.maxTokens ?? 4096,
-          temperature: req.temperature ?? 0.3,
         }),
       });
       const json = (await res.json()) as OpenAIResponse;
@@ -63,7 +61,10 @@ function createOpenAIProvider(config: PluginConfig): LLMProvider {
         });
         return { ok: true };
       } catch (e) {
-        return { ok: false, message: e instanceof Error ? e.message : "Failed" };
+        return {
+          ok: false,
+          message: e instanceof Error ? e.message : "Failed",
+        };
       }
     },
   };
@@ -88,8 +89,18 @@ export const openaiPlugin: LLMProviderPlugin = {
       },
     ],
     models: [
-      { id: "gpt-4o", label: "GPT-4o", tier: "reasoning" },
-      { id: "gpt-4o-mini", label: "GPT-4o mini", tier: "drafting" },
+      {
+        id: "gpt-4o",
+        label: "GPT-4o",
+        tier: "reasoning",
+        pricing: { usdPerMTokIn: 2.5, usdPerMTokOut: 10 },
+      },
+      {
+        id: "gpt-4o-mini",
+        label: "GPT-4o mini",
+        tier: "drafting",
+        pricing: { usdPerMTokIn: 0.15, usdPerMTokOut: 0.6 },
+      },
     ],
     docsUrl: "https://platform.openai.com/docs",
   },

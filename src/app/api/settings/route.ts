@@ -1,5 +1,5 @@
-// GET  /api/settings  -> all app settings (portfolio limits, model prefs, flags)
-// POST /api/settings  -> { key, value } partial update
+// GET  /api/settings -> all app settings (valuation policy, sizing, model prefs)
+// POST /api/settings -> { key, value } partial update
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -8,6 +8,8 @@ import {
   SETTING_DEFAULTS,
   type SettingKey,
 } from "@/lib/app-settings";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json({ settings: await getAllSettings() });

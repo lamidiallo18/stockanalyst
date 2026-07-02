@@ -3,9 +3,6 @@
 
 export const AnalysisType = {
   STOCK: "STOCK",
-  SECTOR_THEME: "SECTOR_THEME",
-  ETF: "ETF",
-  PORTFOLIO_IMPACT: "PORTFOLIO_IMPACT",
 } as const;
 export type AnalysisType = (typeof AnalysisType)[keyof typeof AnalysisType];
 
@@ -17,7 +14,6 @@ export const AnalysisDepth = {
 export type AnalysisDepth = (typeof AnalysisDepth)[keyof typeof AnalysisDepth];
 
 export const AnalysisStatus = {
-  DRAFT: "DRAFT",
   RUNNING: "RUNNING",
   COMPLETE: "COMPLETE",
   ERROR: "ERROR",
@@ -41,26 +37,21 @@ export const Confidence = {
 } as const;
 export type Confidence = (typeof Confidence)[keyof typeof Confidence];
 
-// How trustworthy a single financial datum is. Surfaced visibly in the UI.
+// How trustworthy a single datum is. Surfaced visibly in the UI and memo.
+// Semantics are defined in docs/normalization-policy.md §4.
 export const ReliabilityFlag = {
-  REPORTED: "REPORTED", // pulled directly from a filing/provider as-reported
-  DERIVED: "DERIVED", // computed by our Calc Engine from reported inputs
-  ESTIMATE: "ESTIMATE", // analyst/consensus estimate, not actual
-  PROXY: "PROXY", // a stand-in metric because the real one is unavailable
-  STALE: "STALE", // older than the freshness threshold
-  MISSING: "MISSING", // unavailable
+  REPORTED: "REPORTED",
+  DERIVED: "DERIVED",
+  PROXY: "PROXY",
+  STALE: "STALE",
+  MISSING: "MISSING",
 } as const;
 export type ReliabilityFlag =
   (typeof ReliabilityFlag)[keyof typeof ReliabilityFlag];
 
-export const ThesisStatus = {
-  INTACT: "INTACT",
-  WEAKENING: "WEAKENING",
-  BROKEN: "BROKEN",
-  PLAYED_OUT: "PLAYED_OUT",
-} as const;
-export type ThesisStatus = (typeof ThesisStatus)[keyof typeof ThesisStatus];
-
+// Nine scoring categories. portfolio_fit is intentionally absent in v1:
+// there is no portfolio data to score against, and a placeholder score would
+// violate the transparency rule. It returns with the portfolio phase.
 export const ScoreCategory = {
   BUSINESS_QUALITY: "business_quality",
   MOAT_DURABILITY: "moat_durability",
@@ -70,11 +61,9 @@ export const ScoreCategory = {
   MANAGEMENT: "management_execution",
   INDUSTRY: "industry_attractiveness",
   RISK_LEVEL: "risk_level",
-  PORTFOLIO_FIT: "portfolio_fit",
   THESIS_CONFIDENCE: "thesis_confidence",
 } as const;
-export type ScoreCategory =
-  (typeof ScoreCategory)[keyof typeof ScoreCategory];
+export type ScoreCategory = (typeof ScoreCategory)[keyof typeof ScoreCategory];
 
 export const ProviderKind = {
   DATA: "DATA",

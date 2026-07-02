@@ -1,4 +1,5 @@
-// Tiny className combiner (keeps deps minimal; no clsx/tailwind-merge needed yet).
+// Tiny className combiner + display formatters shared across the UI.
+
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
@@ -44,4 +45,9 @@ export function formatMetric(
   if (unit === "x") return formatNum(value, 1, "×");
   if (unit === "$") return formatMoney(value);
   return formatNum(value);
+}
+
+export function formatUsd(n: number | null | undefined, digits = 3): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return `$${n.toFixed(digits)}`;
 }

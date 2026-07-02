@@ -4,14 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+// v1 scope: only pages that work. No stubs (scope amendment 1).
 export const NAV_ITEMS = [
   { href: "/", label: "Home", icon: "▣" },
   { href: "/new-analysis", label: "New Analysis", icon: "＋" },
   { href: "/company", label: "Company", icon: "₿" },
-  { href: "/sector", label: "Sector / Theme", icon: "◉" },
-  { href: "/portfolio", label: "Portfolio", icon: "⬡" },
-  { href: "/tracker", label: "Thesis Tracker", icon: "✓" },
-  { href: "/sources", label: "Source Library", icon: "❏" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 

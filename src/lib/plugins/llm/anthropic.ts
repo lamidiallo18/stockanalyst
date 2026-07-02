@@ -1,5 +1,6 @@
 // Anthropic (Claude) LLM plugin — live implementation via the Messages REST
 // API (no SDK dependency). Powers thesis critique, bear-case and drafting.
+// Pricing per model feeds the pre-run cost estimate and post-run actuals.
 
 import {
   type LLMProvider,
@@ -18,13 +19,12 @@ interface AnthropicResponse {
 
 function createAnthropicProvider(config: PluginConfig): LLMProvider {
   const apiKey = String(config.apiKey ?? "");
-  const defaultModel = String(config.defaultModel ?? "claude-opus-4-8");
 
   return {
     key: "anthropic",
     async complete(req) {
       if (!apiKey) throw new Error("Anthropic API key not configured.");
-      const model = req.model ?? defaultModel;
+      const model = req.model ?? "claude-opus-4-8";
       const res = await fetch(API, {
         method: "POST",
         headers: {
@@ -35,7 +35,6 @@ function createAnthropicProvider(config: PluginConfig): LLMProvider {
         body: JSON.stringify({
           model,
           max_tokens: req.maxTokens ?? 4096,
-          temperature: req.temperature ?? 0.3,
           system: req.system,
           messages: req.messages.map((m) => ({
             role: m.role,
@@ -69,7 +68,10 @@ function createAnthropicProvider(config: PluginConfig): LLMProvider {
         });
         return { ok: true };
       } catch (e) {
-        return { ok: false, message: e instanceof Error ? e.message : "Failed" };
+        return {
+          ok: false,
+          message: e instanceof Error ? e.message : "Failed",
+        };
       }
     },
   };
@@ -80,7 +82,7 @@ export const anthropicPlugin: LLMProviderPlugin = {
     key: "anthropic",
     name: "Anthropic (Claude)",
     description:
-      "Claude models power thesis critique, bear-case generation and memo drafting. Opus for adversarial reasoning, Sonnet for drafting/extraction.",
+      "Claude models power thesis critique, bear-case generation and memo drafting. Opus for adversarial reasoning, Sonnet for drafting.",
     kind: "LLM",
     configFields: [
       {
@@ -94,15 +96,20 @@ export const anthropicPlugin: LLMProviderPlugin = {
       },
     ],
     models: [
-      { id: "claude-opus-4-8", label: "Claude Opus 4.8", tier: "reasoning" },
-      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", tier: "drafting" },
       {
-        id: "claude-haiku-4-5-20251001",
-        label: "Claude Haiku 4.5",
-        tier: "extraction",
+        id: "claude-opus-4-8",
+        label: "Claude Opus 4.8",
+        tier: "reasoning",
+        pricing: { usdPerMTokIn: 5, usdPerMTokOut: 25 },
+      },
+      {
+        id: "claude-sonnet-4-6",
+        label: "Claude Sonnet 4.6",
+        tier: "drafting",
+        pricing: { usdPerMTokIn: 3, usdPerMTokOut: 15 },
       },
     ],
-    docsUrl: "https://docs.anthropic.com",
+    docsUrl: "https://platform.claude.com/docs",
   },
   create: createAnthropicProvider,
 };

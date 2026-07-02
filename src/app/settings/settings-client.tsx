@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Card,
   CardTitle,
@@ -26,7 +26,12 @@ interface PluginView {
   description: string;
   kind: "DATA" | "LLM";
   capabilities?: string[];
-  models?: { id: string; label: string; tier: string }[];
+  models?: {
+    id: string;
+    label: string;
+    tier: string;
+    pricing: { usdPerMTokIn: number; usdPerMTokOut: number };
+  }[];
   configFields: PluginConfigField[];
   docsUrl?: string;
   keyless?: boolean;
@@ -37,30 +42,39 @@ interface PluginView {
   configured: boolean;
 }
 
+interface Settings {
+  valuationPolicy: { discountRatePct: number };
+  sizingPolicy: { maxSingleNamePct: number; targetVolPct: number };
+}
+
 export function SettingsClient({
   encryptionReady,
 }: {
   encryptionReady: boolean;
 }) {
   const [plugins, setPlugins] = useState<PluginView[] | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/plugins");
-      const json = await res.json();
-      setPlugins(json.plugins);
+      const [pRes, sRes] = await Promise.all([
+        fetch("/api/plugins"),
+        fetch("/api/settings"),
+      ]);
+      setPlugins((await pRes.json()).plugins);
+      setSettings((await sRes.json()).settings);
     } catch {
-      setError("Failed to load plugins.");
+      setError("Failed to load settings.");
     }
-  }
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   if (error) return <p className="text-[var(--negative)]">{error}</p>;
-  if (!plugins) return <Muted>Loading plugins…</Muted>;
+  if (!plugins || !settings) return <Muted>Loading…</Muted>;
 
   const data = plugins.filter((p) => p.kind === "DATA");
   const llm = plugins.filter((p) => p.kind === "LLM");
@@ -79,6 +93,8 @@ export function SettingsClient({
           </p>
         </Card>
       )}
+
+      <AssumptionsCard settings={settings} onSaved={load} />
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -102,6 +118,91 @@ export function SettingsClient({
         </div>
       </section>
     </div>
+  );
+}
+
+function AssumptionsCard({
+  settings,
+  onSaved,
+}: {
+  settings: Settings;
+  onSaved: () => void;
+}) {
+  const [discount, setDiscount] = useState(
+    String(settings.valuationPolicy.discountRatePct),
+  );
+  const [cap, setCap] = useState(String(settings.sizingPolicy.maxSingleNamePct));
+  const [targetVol, setTargetVol] = useState(
+    String(settings.sizingPolicy.targetVolPct),
+  );
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function save() {
+    setMsg(null);
+    const r1 = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        key: "valuationPolicy",
+        value: { discountRatePct: Number(discount) || 10 },
+      }),
+    });
+    const r2 = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        key: "sizingPolicy",
+        value: {
+          maxSingleNamePct: Number(cap) || 8,
+          targetVolPct: Number(targetVol) || 25,
+        },
+      }),
+    });
+    setMsg(r1.ok && r2.ok ? "Saved." : "Save failed.");
+    onSaved();
+  }
+
+  return (
+    <Card>
+      <CardTitle>Analysis Assumptions</CardTitle>
+      <Muted className="mt-1 block text-xs">
+        Reverse-DCF horizon is pinned at 10y with a 2.5% perpetuity terminal
+        growth (documented constants). Discount rate and sizing inputs are
+        yours to set.
+      </Muted>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]">
+            Discount rate % (reverse DCF)
+          </label>
+          <Input
+            type="number"
+            value={discount}
+            onChange={(e) => setDiscount(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]">
+            Max single-name % (sizing cap)
+          </label>
+          <Input type="number" value={cap} onChange={(e) => setCap(e.target.value)} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]">
+            Target volatility % (sizing)
+          </label>
+          <Input
+            type="number"
+            value={targetVol}
+            onChange={(e) => setTargetVol(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-end gap-3">
+        {msg && <Muted className="text-xs">{msg}</Muted>}
+        <Button onClick={save}>Save assumptions</Button>
+      </div>
+    </Card>
   );
 }
 
@@ -182,9 +283,10 @@ function PluginCard({
       )}
       {plugin.models && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {plugin.models.map((m) => (
-            <Badge key={m.id} tone="accent">
-              {m.label} · {m.tier}
+          {plugin.models.map((m, i) => (
+            <Badge key={`${m.id}-${i}`} tone="accent">
+              {m.label} · {m.tier} · ${m.pricing.usdPerMTokIn}/$
+              {m.pricing.usdPerMTokOut} per MTok
             </Badge>
           ))}
         </div>
@@ -198,9 +300,7 @@ function PluginCard({
             <div key={f.key}>
               <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
                 {f.label}
-                {f.required && (
-                  <span className="text-[var(--negative)]"> *</span>
-                )}
+                {f.required && <span className="text-[var(--negative)]"> *</span>}
               </label>
               <Input
                 type={f.secret ? "password" : "text"}

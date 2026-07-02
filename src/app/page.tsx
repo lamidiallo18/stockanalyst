@@ -1,21 +1,32 @@
 import Link from "next/link";
+import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
-import {
-  Card,
-  CardTitle,
-  Muted,
-  Badge,
-  Button,
-} from "@/components/ui/primitives";
+import { Card, CardTitle, Muted, Badge, Button } from "@/components/ui/primitives";
 
-// Home dashboard. Phase 0 shows the intended structure with empty states;
-// live data wiring arrives in later phases.
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+const ratingTone: Record<string, "positive" | "negative" | "warning" | "default"> = {
+  ATTRACTIVE: "positive",
+  WATCHLIST: "warning",
+  AVOID: "negative",
+  TOO_HARD: "default",
+  NEEDS_WORK: "warning",
+};
+
+export default async function HomePage() {
+  const analyses = await prisma.analysis.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 12,
+    include: {
+      memos: { orderBy: { version: "desc" }, take: 1 },
+    },
+  });
+
   return (
     <div>
       <PageHeader
         title="Research Desk"
-        subtitle="Portfolio health, open theses, and recent work at a glance."
+        subtitle="Recent analyses and memos."
         action={
           <Link href="/new-analysis">
             <Button>+ New Analysis</Button>
@@ -23,65 +34,61 @@ export default function HomePage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card>
-          <CardTitle>Portfolio Value</CardTitle>
-          <div className="mt-2 text-2xl font-semibold">—</div>
-          <Muted className="text-xs">
-            No holdings yet · add them in Portfolio
-          </Muted>
-        </Card>
-        <Card>
-          <CardTitle>Concentration Alerts</CardTitle>
-          <div className="mt-2 text-2xl font-semibold">0</div>
-          <Muted className="text-xs">
-            Single-name / sector / theme limits OK
-          </Muted>
-        </Card>
-        <Card>
-          <CardTitle>Theses Needing Review</CardTitle>
-          <div className="mt-2 text-2xl font-semibold">0</div>
-          <Muted className="text-xs">Stale checks & weakening status</Muted>
-        </Card>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <div className="flex items-center justify-between">
-            <CardTitle>Recent Analyses</CardTitle>
-            <Badge tone="accent">Phase 2</Badge>
+      <Card>
+        <CardTitle>Recent Analyses</CardTitle>
+        {analyses.length === 0 ? (
+          <div className="mt-4 flex h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-[var(--muted)]">
+            <span>No analyses yet.</span>
+            <span>
+              First: enable providers in{" "}
+              <Link href="/settings" className="text-[var(--accent)]">
+                Settings
+              </Link>
+              , then run one from{" "}
+              <Link href="/new-analysis" className="text-[var(--accent)]">
+                New Analysis
+              </Link>
+              .
+            </span>
           </div>
-          <div className="mt-4 flex h-28 items-center justify-center rounded-lg border border-dashed text-sm text-[var(--muted)]">
-            Run your first memo from “New Analysis”.
+        ) : (
+          <div className="mt-3 divide-y">
+            {analyses.map((a) => {
+              const memo = a.memos[0];
+              return (
+                <Link
+                  key={a.id}
+                  href={a.status === "COMPLETE" ? `/analysis/${a.id}` : "#"}
+                  className="flex items-center justify-between gap-3 py-2.5 hover:bg-[var(--surface-2)]"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-sm font-semibold">
+                      {a.subjectRef}
+                    </span>
+                    <Badge>{a.depth.toLowerCase()}</Badge>
+                    {a.status === "COMPLETE" && memo?.rating ? (
+                      <Badge tone={ratingTone[memo.rating] ?? "default"}>
+                        {memo.rating}
+                      </Badge>
+                    ) : (
+                      <Badge tone={a.status === "ERROR" ? "negative" : "accent"}>
+                        {a.status.toLowerCase()}
+                      </Badge>
+                    )}
+                    {memo?.compositeScore != null && (
+                      <Muted className="text-xs">
+                        composite {memo.compositeScore}/100
+                      </Muted>
+                    )}
+                  </div>
+                  <Muted className="text-xs">
+                    {a.createdAt.toISOString().slice(0, 16).replace("T", " ")}
+                  </Muted>
+                </Link>
+              );
+            })}
           </div>
-        </Card>
-        <Card>
-          <div className="flex items-center justify-between">
-            <CardTitle>Watchlist</CardTitle>
-            <Badge tone="accent">Phase 2</Badge>
-          </div>
-          <div className="mt-4 flex h-28 items-center justify-center rounded-lg border border-dashed text-sm text-[var(--muted)]">
-            Tickers you flag will appear here.
-          </div>
-        </Card>
-      </div>
-
-      <Card className="mt-4">
-        <CardTitle>Getting started</CardTitle>
-        <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-[var(--muted)]">
-          <li>
-            Open{" "}
-            <Link href="/settings" className="text-[var(--accent)]">
-              Settings
-            </Link>{" "}
-            and add your FMP key and Anthropic key (stored encrypted, locally).
-          </li>
-          <li>Add your current holdings in Portfolio.</li>
-          <li>
-            Start a new analysis: enter a ticker or theme, write your thesis,
-            attach files, pick a depth.
-          </li>
-        </ol>
+        )}
       </Card>
     </div>
   );
