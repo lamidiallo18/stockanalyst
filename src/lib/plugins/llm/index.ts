@@ -5,6 +5,7 @@
 import { registry } from "../registry";
 import { anthropicPlugin } from "./anthropic";
 import { openaiPlugin } from "./openai";
+import { mockPlugin } from "./mock";
 
 let registered = false;
 
@@ -12,5 +13,6 @@ export function registerLLMPlugins() {
   if (registered) return;
   registry.registerLLM(anthropicPlugin);
   registry.registerLLM(openaiPlugin);
+  registry.registerLLM(mockPlugin);
   registered = true;
 }
