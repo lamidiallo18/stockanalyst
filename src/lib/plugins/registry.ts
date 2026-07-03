@@ -13,17 +13,18 @@ class PluginRegistry {
   private data = new Map<string, DataProviderPlugin>();
   private llm = new Map<string, LLMProviderPlugin>();
 
+  // Idempotent: re-registering the same key is a no-op. This matters because
+  // the registry singleton survives Next.js dev hot-reload while the module
+  // guards that gate registration do not, so registration can be attempted
+  // again against an already-populated registry. Re-registering is harmless
+  // (the plugin definition is identical), so we skip rather than throw.
   registerData(plugin: DataProviderPlugin) {
-    if (this.data.has(plugin.manifest.key)) {
-      throw new Error(`Duplicate data plugin key: ${plugin.manifest.key}`);
-    }
+    if (this.data.has(plugin.manifest.key)) return;
     this.data.set(plugin.manifest.key, plugin);
   }
 
   registerLLM(plugin: LLMProviderPlugin) {
-    if (this.llm.has(plugin.manifest.key)) {
-      throw new Error(`Duplicate LLM plugin key: ${plugin.manifest.key}`);
-    }
+    if (this.llm.has(plugin.manifest.key)) return;
     this.llm.set(plugin.manifest.key, plugin);
   }
 
